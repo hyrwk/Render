@@ -11,6 +11,12 @@ TOKEN = "8717216359:AAHTuWEkqwqStKC4t8KBZwjfphgacNlN6YU"
 ADMIN_ID = 6949720185
 bot = telebot.TeleBot(TOKEN)
 
+# تنظيف أي اتصال أو Webhook معلق لمنع خطأ 409 Conflict
+try:
+    bot.remove_webhook()
+except Exception as e:
+    print(f"Error removing webhook: {e}")
+
 # ملفات تخزين البيانات محلياً
 USERS_FILE = "users.json"
 BLOCKED_FILE = "blocked.json"
