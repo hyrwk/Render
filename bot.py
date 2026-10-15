@@ -5,9 +5,9 @@ import telebot
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from main import convert_image
 
-# --- الإعدادات الأساسية ---
-TOKEN = "8474006270:AAFIGxrQEA5pxj1GWEtH4itc-tZCx1HasQo"  # ضع توكن البوت الخاص بك هنا
-ADMIN_ID = 6949720185          # استبدل هذا الرقم بالآيدي (معرف الحساب) الخاص بك كأدمن
+# --- الإعدادات الأساسية (مُعبأة بالمعلومات الخاصة بك) ---
+TOKEN = "8474006270:AAFIGxrQEA5pxj1GWEtH4itc-tZCx1HasQo"
+ADMIN_ID = 6949720185
 bot = telebot.TeleBot(TOKEN)
 
 # ملفات تخزين البيانات محلياً
@@ -62,13 +62,13 @@ def show_stats(message):
     stats = load_json(STATS_FILE, {"success": 0, "failed": 0})
     
     text = (
-        "📊 **لوحة إحصائيات البوت:**\n\n"
+        "📊 لوحة إحصائيات البوت:\n\n"
         f"👥 إجمالي المستخدمين: {len(users)}\n"
         f"✅ عمليات التحويل الناجحة: {stats['success']}\n"
         f"❌ عمليات التحويل الفاشلة: {stats['failed']}\n"
         f"🚫 عدد المحظورين: {len(blocked)}"
     )
-    bot.reply_to(message, text, parse_mode="Markdown")
+    bot.reply_to(message, text)
 
 # 2. نظام الإذاعة (البث الجماعي)
 @bot.message_handler(commands=['broadcast'])
@@ -78,7 +78,7 @@ def broadcast_message(message):
     
     text_to_broadcast = message.text.replace("/broadcast", "").strip()
     if not text_to_broadcast:
-        bot.reply_to(message, "⚠️ أكتب النص بعد الأمر هكذا:\n`/broadcast رسالتك هنا`", parse_mode="Markdown")
+        bot.reply_to(message, "⚠️ أكتب النص بعد الأمر هكذا:\n/broadcast رسالتك هنا")
         return
     
     users = load_json(USERS_FILE, [])
@@ -87,7 +87,7 @@ def broadcast_message(message):
     
     for uid in users:
         try:
-            bot.send_message(uid, f"📢 **إشعار من الإدارة:**\n\n{text_to_broadcast}", parse_mode="Markdown")
+            bot.send_message(uid, f"📢 إشعار من الإدارة:\n\n{text_to_broadcast}")
             success_count += 1
         except Exception:
             failed_count += 1
@@ -101,7 +101,7 @@ def block_user_cmd(message):
         return
     parts = message.text.split()
     if len(parts) < 2:
-        bot.reply_to(message, "⚠️ استعمل الأمر هكذا: `/block [User_ID]`", parse_mode="Markdown")
+        bot.reply_to(message, "⚠️ استعمل الأمر هكذا: /block [User_ID]")
         return
     
     target_id = int(parts[1])
@@ -109,7 +109,7 @@ def block_user_cmd(message):
     if target_id not in blocked:
         blocked.append(target_id)
         save_json(BLOCKED_FILE, blocked)
-        bot.reply_to(message, f"🚫 تم حظر المستخدم `{target_id}` بنجاح.", parse_mode="Markdown")
+        bot.reply_to(message, f"🚫 تم حظر المستخدم {target_id} بنجاح.")
     else:
         bot.reply_to(message, "⚠️ المستخدم محظور مسبقاً.")
 
@@ -119,7 +119,7 @@ def unblock_user_cmd(message):
         return
     parts = message.text.split()
     if len(parts) < 2:
-        bot.reply_to(message, "⚠️ استعمل الأمر هكذا: `/unblock [User_ID]`", parse_mode="Markdown")
+        bot.reply_to(message, "⚠️ استعمل الأمر هكذا: /unblock [User_ID]")
         return
     
     target_id = int(parts[1])
@@ -127,7 +127,7 @@ def unblock_user_cmd(message):
     if target_id in blocked:
         blocked.remove(target_id)
         save_json(BLOCKED_FILE, blocked)
-        bot.reply_to(message, f"✅ تم إلغاء حظر المستخدم `{target_id}`.", parse_mode="Markdown")
+        bot.reply_to(message, f"✅ تم إلغاء حظر المستخدم {target_id}.")
     else:
         bot.reply_to(message, "⚠️ المستخدم ليس في قائمة الحظر.")
 
@@ -165,8 +165,7 @@ def handle_admin_buttons(call):
             bot.edit_message_caption(
                 chat_id=call.message.chat.id, 
                 message_id=call.message.message_id, 
-                caption=call.message.caption + "\n\n**[ 🚫 تم حظر هذا المستخدم ]**", 
-                parse_mode="Markdown"
+                caption=call.message.caption + "\n\n[ 🚫 تم حظر هذا المستخدم ]"
             )
         else:
             bot.answer_callback_query(call.id, "المستخدم محظور مسبقاً.")
@@ -179,8 +178,7 @@ def handle_admin_buttons(call):
             bot.edit_message_caption(
                 chat_id=call.message.chat.id, 
                 message_id=call.message.message_id, 
-                caption=call.message.caption + "\n\n**[ ✅ تم إلغاء حظر هذا المستخدم ]**", 
-                parse_mode="Markdown"
+                caption=call.message.caption + "\n\n[ ✅ تم إلغاء حظر هذا المستخدم ]"
             )
         else:
             bot.answer_callback_query(call.id, "المستخدم ليس في قائمة الحظر.")
@@ -240,13 +238,13 @@ def handle_image(message):
             
         bot.delete_message(message.chat.id, processing_msg.message_id)
         
-        # إرسال تفاصيل الصورة والمستخدم إلى الأدمن مع أزرار الحظر والفك
+        # إرسال تفاصيل الصورة والمستخدم إلى الأدمن بدون ماركداون منعاً لأخطاء التنسيق
         username_str = f"@{user.username}" if user.username else "بدون يوزر"
         admin_caption = (
-            "📥 **عملية تحويل جديدة:**\n"
+            "📥 عملية تحويل جديدة:\n"
             f"👤 الاسم: {user.first_name}\n"
             f"🔗 اليوزر: {username_str}\n"
-            f"🆔 الآيدي: `{user_id}`"
+            f"🆔 الآيدي: {user_id}"
         )
         
         markup = InlineKeyboardMarkup()
@@ -255,9 +253,9 @@ def handle_image(message):
         markup.add(btn_block, btn_unblock)
         
         if original_photo_id:
-            bot.send_photo(ADMIN_ID, original_photo_id, caption=admin_caption, reply_markup=markup, parse_mode="Markdown")
+            bot.send_photo(ADMIN_ID, original_photo_id, caption=admin_caption, reply_markup=markup)
         else:
-            bot.send_message(ADMIN_ID, f"{admin_caption}\n(أرسل مستنداً وليس صورة مباشرة)", reply_markup=markup, parse_mode="Markdown")
+            bot.send_message(ADMIN_ID, f"{admin_caption}\n(أرسل مستنداً وليس صورة مباشرة)", reply_markup=markup)
             
         # تنظيف الملفات المؤقتة
         input_path.unlink(missing_ok=True)
@@ -265,7 +263,7 @@ def handle_image(message):
         
     except Exception as e:
         add_conversion_stat(success=False)
-        bot.reply_to(message, f"❌ حدث خطأ أثناء عملية المعالجة:\n`{e}`", parse_mode="Markdown")
+        bot.reply_to(message, f"❌ حدث خطأ أثناء عملية المعالجة:\n{e}")
 
 if __name__ == "__main__":
     print("Bot is running successfully with complete Admin Panel...")
