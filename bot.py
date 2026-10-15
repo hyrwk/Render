@@ -16,8 +16,8 @@ USERS_FILE = "users.json"
 BLOCKED_FILE = "blocked.json"
 STATS_FILE = "stats.json"
 SETTINGS_FILE = "settings.json"
-USER_COOLDOWN = {}  # لتتبع التوقيت لمنع السبام (كل 3 ثوانٍ)
-LAST_SENT_BACKUP_ID = None  # لتتبع ومعرفة رسالة ملف التخزين القديمة لحذفها
+USER_COOLDOWN = {}  
+LAST_SENT_BACKUP_ID = None  
 
 # --- دوال مساعدة لإدارة البيانات ---
 def load_json(filename, default):
@@ -164,56 +164,65 @@ def toggle_maintenance(message):
     bot.reply_to(message, f"⚙️ أصبحت حالة وضع الصيانة الآن:\n{status}")
 
 
-# --- معالجة الأزرار الشفافة (حظر، فك حظر، والرد السريع للأدمن فقط) ---
+# --- معالجة الأزرار الشفافة ---
 @bot.callback_query_handler(func=lambda call: True)
 def handle_all_callbacks(call):
     user_id = call.from_user.id
     
-    if call.data.startswith(('block_', 'unblock_')):
-        if user_id != ADMIN_ID:
-            bot.answer_callback_query(call.id, "❌ عذراً، هذا الأمر للمشرف فقط.")
-            return
-        
-        action, target_id_str = call.data.split('_')
-        target_id = int(target_id_str)
-        blocked = load_json(BLOCKED_FILE, [])
-        
-        if action == 'block':
+    if user_id != ADMIN_ID:
+        bot.answer_callback_query(call.id, "❌ عذراً، هذه الأزرار للإدارة فقط.", show_alert=True)
+        return
+
+    data = call.data
+    
+    if data.startswith('block_'):
+        try:
+            target_id = int(data.split('_')[1])
+            blocked = load_json(BLOCKED_FILE, [])
             if target_id not in blocked:
                 blocked.append(target_id)
                 save_json(BLOCKED_FILE, blocked)
-                bot.answer_callback_query(call.id, f"تم حظر المستخدم {target_id} 🚫")
-                try:
-                    bot.edit_message_caption(
-                        chat_id=call.message.chat.id, 
-                        message_id=call.message.message_id, 
-                        caption=call.message.caption + "\n\n[ 🚫 تم حظر هذا المستخدم ]"
-                    )
-                except Exception:
-                    pass
-        elif action == 'unblock':
+            bot.answer_callback_query(call.id, f"تم حظر المستخدم {target_id} بنجاح 🚫", show_alert=False)
+            try:
+                bot.edit_message_caption(
+                    chat_id=call.message.chat.id, 
+                    message_id=call.message.message_id, 
+                    caption=(call.message.caption or "") + "\n\n[ 🚫 تم حظر هذا المستخدم ]"
+                )
+            except Exception:
+                pass
+        except Exception as e:
+            bot.answer_callback_query(call.id, f"حدث خطأ: {e}", show_alert=True)
+        return
+
+    if data.startswith('unblock_'):
+        try:
+            target_id = int(data.split('_')[1])
+            blocked = load_json(BLOCKED_FILE, [])
             if target_id in blocked:
                 blocked.remove(target_id)
                 save_json(BLOCKED_FILE, blocked)
-                bot.answer_callback_query(call.id, f"تم إلغاء حظر المستخدم {target_id} ✅")
-                try:
-                    bot.edit_message_caption(
-                        chat_id=call.message.chat.id, 
-                        message_id=call.message.message_id, 
-                        caption=call.message.caption + "\n\n[ ✅ تم إلغاء حظر هذا المستخدم ]"
-                    )
-                except Exception:
-                    pass
+            bot.answer_callback_query(call.id, f"تم إلغاء حظر المستخدم {target_id} ✅", show_alert=False)
+            try:
+                bot.edit_message_caption(
+                    chat_id=call.message.chat.id, 
+                    message_id=call.message.message_id, 
+                    caption=(call.message.caption or "") + "\n\n[ ✅ تم إلغاء حظر هذا المستخدم ]"
+                )
+            except Exception:
+                pass
+        except Exception as e:
+            bot.answer_callback_query(call.id, f"حدث خطأ: {e}", show_alert=True)
         return
 
-    if call.data.startswith('reply_to_'):
-        if user_id != ADMIN_ID:
-            bot.answer_callback_query(call.id, "❌ للمشرف فقط.")
-            return
-        target_uid = int(call.data.replace('reply_to_', ''))
-        bot.answer_callback_query(call.id)
-        bot.send_message(ADMIN_ID, f"✍️ أكتب ردك الآن للمستخدم صاحب الآيدي: `{target_uid}`", parse_mode="Markdown")
-        bot.register_next_step_handler_by_chat_id(ADMIN_ID, lambda msg: send_admin_reply_to_user(msg, target_uid))
+    if data.startswith('reply_to_'):
+        try:
+            target_uid = int(data.split('_')[2])
+            bot.answer_callback_query(call.id)
+            sent_msg = bot.send_message(ADMIN_ID, f"✍️ أكتب ردك الآن للمستخدم صاحب الآيدي: `{target_uid}`", parse_mode="Markdown")
+            bot.register_next_step_handler(sent_msg, lambda msg: send_admin_reply_to_user(msg, target_uid))
+        except Exception as e:
+            bot.answer_callback_query(call.id, f"حدث خطأ: {e}", show_alert=True)
         return
 
 def send_admin_reply_to_user(message, target_uid):
@@ -249,7 +258,6 @@ def send_welcome(message):
     )
     bot.send_message(message.chat.id, welcome_text, reply_markup=markup, parse_mode="Markdown")
 
-# أمر الإبلاغ المباشر
 @bot.message_handler(commands=['report'])
 def report_command(message):
     user_id = message.from_user.id
@@ -272,7 +280,7 @@ def report_command(message):
     )
     
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("💬 رد على المستخدم", callback_data=f"reply_to_{user_id}"))
+    markup.add(InlineKeyboardButton("💬 رد على المستخدم", callback_data=f"reply_to_user_{user_id}"))
     
     bot.send_message(ADMIN_ID, admin_msg, reply_markup=markup, parse_mode="Markdown")
 
@@ -283,7 +291,6 @@ def handle_image(message):
     
     track_user(user_id)
     
-    # حماية من السبام (3 ثوانٍ)
     current_time = time.time()
     if user_id in USER_COOLDOWN and user_id != ADMIN_ID:
         elapsed = current_time - USER_COOLDOWN[user_id]
@@ -351,5 +358,5 @@ def handle_image(message):
         bot.reply_to(message, f"❌ حدث خطأ أثناء عملية المعالجة:\n{e}")
 
 if __name__ == "__main__":
-    print("Bot is running successfully with all clean features...")
+    print("Bot is running successfully...")
     bot.infinity_polling()
