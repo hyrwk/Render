@@ -18,6 +18,7 @@ STATS_FILE = "stats.json"
 SETTINGS_FILE = "settings.json"
 USER_COOLDOWN = {}  # لتتبع التوقيت لمنع السبام (كل 3 ثوانٍ)
 LAST_SENT_BACKUP_ID = None  # لتتبع ومعرفة رسالة ملف التخزين القديمة لحذفها
+WAITING_FOR_ISSUE = set()  # قائمة مؤقتة للمستخدمين الذين يكتبون الشكوى
 
 # --- دوال مساعدة لإدارة البيانات ---
 def load_json(filename, default):
@@ -172,8 +173,8 @@ def handle_all_callbacks(call):
     # 1. زر الإبلاغ عن مشكلة
     if call.data == 'report_issue':
         bot.answer_callback_query(call.id, "أرسل رسالتك الآن ✍️")
-        bot.send_message(user_id, "✍️ أرسل رسالتك الآن موضحة مشكلتك، وسيتم تحويلها مباشرة إلى الإدارة للرد عليك بأقرب وقت:")
-        bot.register_next_step_handler_by_chat_id(user_id, receive_user_issue)
+        WAITING_FOR_ISSUE.add(user_id)
+        bot.send_message(user_id, "✍️ أرسل رسالتك أو مشكلتك الآن في المحادثة، وسأقوم بتحويلها مباشرة للإدارة:")
         return
 
     # 2. أزرار حظر وإلغاء حظر المستخدمين (للأدمن)
@@ -225,13 +226,46 @@ def handle_all_callbacks(call):
         bot.register_next_step_handler_by_chat_id(ADMIN_ID, lambda msg: send_admin_reply_to_user(msg, target_uid))
         return
 
-def receive_user_issue(message):
+def send_admin_reply_to_user(message, target_uid):
+    reply_text = message.text
+    if not reply_text:
+        bot.reply_to(message, "⚠️ الرد يجب أن يكون نصياً.")
+        return
+        
+    try:
+        bot.send_message(target_uid, f"📬 **رد من إدارة البوت:**\n\n{reply_text}", parse_mode="Markdown")
+        bot.reply_to(message, "✅ تم إرسال الرد إلى المستخدم بنجاح.")
+    except Exception as e:
+        bot.reply_to(message, f"❌ فشل إرسال الرد للمستخدم: {e}")
+
+
+# --- استقبال الأوامر والنصوص والصور ---
+
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
     user = message.from_user
     user_id = user.id
+    track_user(user_id)
+    
+    markup = InlineKeyboardMarkup(row_width=1)
+    btn_report = InlineKeyboardButton("🛠️ الإبلاغ عن مشكلة", callback_data="report_issue")
+    btn_tutorial = InlineKeyboardButton("📺 شرح طريقة التركيب", url="https://youtu.be/jJv7YxHRirU?si=16WJMn0vcY0SB8QG")
+    markup.add(btn_report, btn_tutorial)
+    
+    welcome_text = f"أهلاً بك يا {user.first_name} في بوت تحويل صور الأفاتار لـ PS4 🎮\nأرسل صورتك الآن لتتم معالجتها بسرعة."
+    bot.send_message(message.chat.id, welcome_text, reply_markup=markup)
+
+# معالجة النصوص الواردة (رسائل الشكاوى أو الإبلاغ)
+@bot.message_handler(func=lambda message: message.from_user.id in WAITING_FOR_ISSUE, content_types=['text'])
+def handle_user_issue_text(message):
+    user_id = message.from_user.id
+    user = message.from_user
     issue_text = message.text
     
+    WAITING_FOR_ISSUE.remove(user_id)
+    
     if not issue_text:
-        bot.reply_to(message, "⚠️ يرجى إرسال رسالة نصية بالمشكلة.")
+        bot.reply_to(message, "⚠️ يرجى إرسال رسالة نصية صحيحة بالمشكلة.")
         return
         
     bot.reply_to(message, "✅ تم إرسال مشكلتك إلى الإدارة بنجاح، سيتم الرد عليك قريباً.")
@@ -249,35 +283,6 @@ def receive_user_issue(message):
     markup.add(InlineKeyboardButton("💬 رد على المستخدم", callback_data=f"reply_to_{user_id}"))
     
     bot.send_message(ADMIN_ID, admin_msg, reply_markup=markup, parse_mode="Markdown")
-
-def send_admin_reply_to_user(message, target_uid):
-    reply_text = message.text
-    if not reply_text:
-        bot.reply_to(message, "⚠️ الرد يجب أن يكون نصياً.")
-        return
-        
-    try:
-        bot.send_message(target_uid, f"📬 **رد من إدارة البوت:**\n\n{reply_text}", parse_mode="Markdown")
-        bot.reply_to(message, "✅ تم إرسال الرد إلى المستخدم بنجاح.")
-    except Exception as e:
-        bot.reply_to(message, f"❌ فشل إرسال الرد للمستخدم: {e}")
-
-
-# --- استقبال الأوامر والصور ---
-
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    user = message.from_user
-    user_id = user.id
-    track_user(user_id)
-    
-    markup = InlineKeyboardMarkup(row_width=1)
-    btn_report = InlineKeyboardButton("🛠️ الإبلاغ عن مشكلة", callback_data="report_issue")
-    btn_tutorial = InlineKeyboardButton("📺 شرح طريقة التركيب", url="https://youtu.be/jJv7YxHRirU?si=16WJMn0vcY0SB8QG")
-    markup.add(btn_report, btn_tutorial)
-    
-    welcome_text = f"أهلاً بك يا {user.first_name} في بوت تحويل صور الأفاتار لـ PS4 🎮\nأرسل صورتك الآن لتتم معالجتها بسرعة."
-    bot.send_message(message.chat.id, welcome_text, reply_markup=markup)
 
 @bot.message_handler(content_types=['photo', 'document'])
 def handle_image(message):
@@ -354,5 +359,5 @@ def handle_image(message):
         bot.reply_to(message, f"❌ حدث خطأ أثناء عملية المعالجة:\n{e}")
 
 if __name__ == "__main__":
-    print("Bot is running successfully with all features fully updated...")
+    print("Bot is running successfully with all complete features...")
     bot.infinity_polling()
