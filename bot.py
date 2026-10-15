@@ -170,9 +170,13 @@ def toggle_maintenance(message):
 def handle_all_callbacks(call):
     user_id = call.from_user.id
     
-    # 1. زر الإبلاغ عن مشكلة
-    if call.data == 'report_issue':
-        bot.answer_callback_query(call.id, "أرسل رسالتك الآن ✍️")
+    # 1. زر الإبلاغ عن مشكلة (معرف جديد لتجاوز الذاكرة المؤقتة)
+    if call.data == 'start_report_process':
+        try:
+            bot.answer_callback_query(call.id, "أرسل رسالتك الآن ✍️", show_alert=False)
+        except Exception:
+            pass
+            
         WAITING_FOR_ISSUE.add(user_id)
         bot.send_message(user_id, "✍️ أرسل رسالتك أو مشكلتك الآن في المحادثة، وسأقوم بتحويلها مباشرة للإدارة:")
         return
@@ -248,7 +252,7 @@ def send_welcome(message):
     track_user(user_id)
     
     markup = InlineKeyboardMarkup(row_width=1)
-    btn_report = InlineKeyboardButton("🛠️ الإبلاغ عن مشكلة", callback_data="report_issue")
+    btn_report = InlineKeyboardButton("🛠️ الإبلاغ عن مشكلة", callback_data="start_report_process")
     btn_tutorial = InlineKeyboardButton("📺 شرح طريقة التركيب", url="https://youtu.be/jJv7YxHRirU?si=16WJMn0vcY0SB8QG")
     markup.add(btn_report, btn_tutorial)
     
