@@ -7,7 +7,7 @@ from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 from main import convert_image
 
 # --- الإعدادات الأساسية ---
-TOKEN = "8474006270:AAFIGxrQEA5pxj1GWEtH4itc-tZCx1HasQo"
+TOKEN = "8717216359:AAHTuWEkqwqStKC4t8KBZwjfphgacNlN6YU"
 ADMIN_ID = 6949720185
 bot = telebot.TeleBot(TOKEN)
 
