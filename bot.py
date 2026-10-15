@@ -78,7 +78,7 @@ def is_maintenance_mode():
     return settings.get("maintenance", False)
 
 
-# --- لوحة الإدارة والأوامر النصية المباشرة ---
+# --- أوامر الإدارة ---
 
 @bot.message_handler(commands=['stats'])
 def show_stats(message):
