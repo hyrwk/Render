@@ -78,7 +78,7 @@ def is_maintenance_mode():
     return settings.get("maintenance", False)
 
 
-# --- لوحة الإدارة والأوامر ---
+# --- لوحة الإدارة والأوامر النصية المباشرة ---
 
 @bot.message_handler(commands=['stats'])
 def show_stats(message):
@@ -125,16 +125,19 @@ def block_user_cmd(message):
         return
     parts = message.text.split()
     if len(parts) < 2:
-        bot.reply_to(message, "⚠️ استعمل الأمر هكذا: /block [User_ID]")
+        bot.reply_to(message, "⚠️ استعمل الأمر هكذا:\n`/block [User_ID]`", parse_mode="Markdown")
         return
-    target_id = int(parts[1])
-    blocked = load_json(BLOCKED_FILE, [])
-    if target_id not in blocked:
-        blocked.append(target_id)
-        save_json(BLOCKED_FILE, blocked)
-        bot.reply_to(message, f"🚫 تم حظر المستخدم {target_id} بنجاح.")
-    else:
-        bot.reply_to(message, "⚠️ المستخدم محظور مسبقاً.")
+    try:
+        target_id = int(parts[1])
+        blocked = load_json(BLOCKED_FILE, [])
+        if target_id not in blocked:
+            blocked.append(target_id)
+            save_json(BLOCKED_FILE, blocked)
+            bot.reply_to(message, f"🚫 تم حظر المستخدم `{target_id}` بنجاح.", parse_mode="Markdown")
+        else:
+            bot.reply_to(message, "⚠️ المستخدم محظور مسبقاً.")
+    except ValueError:
+        bot.reply_to(message, "⚠️ يرجى كتابة آيدي صحيح للمستخدم.")
 
 @bot.message_handler(commands=['unblock'])
 def unblock_user_cmd(message):
@@ -142,16 +145,35 @@ def unblock_user_cmd(message):
         return
     parts = message.text.split()
     if len(parts) < 2:
-        bot.reply_to(message, "⚠️ استعمل الأمر هكذا: /unblock [User_ID]")
+        bot.reply_to(message, "⚠️ استعمل الأمر هكذا:\n`/unblock [User_ID]`", parse_mode="Markdown")
         return
-    target_id = int(parts[1])
-    blocked = load_json(BLOCKED_FILE, [])
-    if target_id in blocked:
-        blocked.remove(target_id)
-        save_json(BLOCKED_FILE, blocked)
-        bot.reply_to(message, f"✅ تم إلغاء حظر المستخدم {target_id}.")
-    else:
-        bot.reply_to(message, "⚠️ المستخدم ليس في قائمة الحظر.")
+    try:
+        target_id = int(parts[1])
+        blocked = load_json(BLOCKED_FILE, [])
+        if target_id in blocked:
+            blocked.remove(target_id)
+            save_json(BLOCKED_FILE, blocked)
+            bot.reply_to(message, f"✅ تم إلغاء حظر المستخدم `{target_id}`.", parse_mode="Markdown")
+        else:
+            bot.reply_to(message, "⚠️ المستخدم ليس في قائمة الحظر.")
+    except ValueError:
+        bot.reply_to(message, "⚠️ يرجى كتابة آيدي صحيح للمستخدم.")
+
+@bot.message_handler(commands=['reply'])
+def reply_user_cmd(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    parts = message.text.split(maxsplit=2)
+    if len(parts) < 3:
+        bot.reply_to(message, "⚠️ استعمل الأمر هكذا:\n`/reply [User_ID] [الرد هنا]`", parse_mode="Markdown")
+        return
+    try:
+        target_id = int(parts[1])
+        reply_text = parts[2]
+        bot.send_message(target_id, f"📬 **رد من إدارة البوت:**\n\n{reply_text}", parse_mode="Markdown")
+        bot.reply_to(message, f"✅ تم إرسال الرد إلى المستخدم `{target_id}` بنجاح.", parse_mode="Markdown")
+    except Exception as e:
+        bot.reply_to(message, f"❌ فشل إرسال الرد: {e}")
 
 @bot.message_handler(commands=['maintenance'])
 def toggle_maintenance(message):
@@ -162,80 +184,6 @@ def toggle_maintenance(message):
     save_json(SETTINGS_FILE, settings)
     status = "مفعل 🛠️ (البوت متوقف للمستخدمين)" if settings["maintenance"] else "معطل 🟢 (البوت يعمل طبيعياً)"
     bot.reply_to(message, f"⚙️ أصبحت حالة وضع الصيانة الآن:\n{status}")
-
-
-# --- معالجة الأزرار الشفافة ---
-@bot.callback_query_handler(func=lambda call: True)
-def handle_all_callbacks(call):
-    user_id = call.from_user.id
-    
-    if user_id != ADMIN_ID:
-        bot.answer_callback_query(call.id, "❌ عذراً، هذه الأزرار للإدارة فقط.", show_alert=True)
-        return
-
-    data = call.data
-    
-    if data.startswith('block_'):
-        try:
-            target_id = int(data.split('_')[1])
-            blocked = load_json(BLOCKED_FILE, [])
-            if target_id not in blocked:
-                blocked.append(target_id)
-                save_json(BLOCKED_FILE, blocked)
-            bot.answer_callback_query(call.id, f"تم حظر المستخدم {target_id} بنجاح 🚫", show_alert=False)
-            try:
-                bot.edit_message_caption(
-                    chat_id=call.message.chat.id, 
-                    message_id=call.message.message_id, 
-                    caption=(call.message.caption or "") + "\n\n[ 🚫 تم حظر هذا المستخدم ]"
-                )
-            except Exception:
-                pass
-        except Exception as e:
-            bot.answer_callback_query(call.id, f"حدث خطأ: {e}", show_alert=True)
-        return
-
-    if data.startswith('unblock_'):
-        try:
-            target_id = int(data.split('_')[1])
-            blocked = load_json(BLOCKED_FILE, [])
-            if target_id in blocked:
-                blocked.remove(target_id)
-                save_json(BLOCKED_FILE, blocked)
-            bot.answer_callback_query(call.id, f"تم إلغاء حظر المستخدم {target_id} ✅", show_alert=False)
-            try:
-                bot.edit_message_caption(
-                    chat_id=call.message.chat.id, 
-                    message_id=call.message.message_id, 
-                    caption=(call.message.caption or "") + "\n\n[ ✅ تم إلغاء حظر هذا المستخدم ]"
-                )
-            except Exception:
-                pass
-        except Exception as e:
-            bot.answer_callback_query(call.id, f"حدث خطأ: {e}", show_alert=True)
-        return
-
-    if data.startswith('reply_to_'):
-        try:
-            target_uid = int(data.split('_')[2])
-            bot.answer_callback_query(call.id)
-            sent_msg = bot.send_message(ADMIN_ID, f"✍️ أكتب ردك الآن للمستخدم صاحب الآيدي: `{target_uid}`", parse_mode="Markdown")
-            bot.register_next_step_handler(sent_msg, lambda msg: send_admin_reply_to_user(msg, target_uid))
-        except Exception as e:
-            bot.answer_callback_query(call.id, f"حدث خطأ: {e}", show_alert=True)
-        return
-
-def send_admin_reply_to_user(message, target_uid):
-    reply_text = message.text
-    if not reply_text:
-        bot.reply_to(message, "⚠️ الرد يجب أن يكون نصياً.")
-        return
-        
-    try:
-        bot.send_message(target_uid, f"📬 **رد من إدارة البوت:**\n\n{reply_text}", parse_mode="Markdown")
-        bot.reply_to(message, "✅ تم إرسال الرد إلى المستخدم بنجاح.")
-    except Exception as e:
-        bot.reply_to(message, f"❌ فشل إرسال الرد للمستخدم: {e}")
 
 
 # --- استقبال الأوامر والنصوص والصور ---
@@ -272,17 +220,16 @@ def report_command(message):
     
     username_str = f"@{user.username}" if user.username else "بدون يوزر"
     admin_msg = (
-        "🚨 **شكوى أو مشكلة جديدة (عبر الأمر /report):**\n"
+        "🚨 **شكوى أو مشكلة جديدة:**\n"
         f"👤 الاسم: {user.first_name}\n"
         f"🔗 اليوزر: {username_str}\n"
-        f"🆔 الآيدي: {user_id}\n\n"
-        f"💬 النص:\n{text_parts}"
+        f"🆔 الآيدي: `{user_id}`\n\n"
+        f"💬 النص:\n{text_parts}\n\n"
+        "💡 **للرد على المستخدم:**\n"
+        f"`/reply {user_id} ردك هنا`"
     )
     
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("💬 رد على المستخدم", callback_data=f"reply_to_user_{user_id}"))
-    
-    bot.send_message(ADMIN_ID, admin_msg, reply_markup=markup, parse_mode="Markdown")
+    bot.send_message(ADMIN_ID, admin_msg, parse_mode="Markdown")
 
 @bot.message_handler(content_types=['photo', 'document'])
 def handle_image(message):
@@ -337,18 +284,16 @@ def handle_image(message):
             "📥 عملية تحويل جديدة:\n"
             f"👤 الاسم: {user.first_name}\n"
             f"🔗 اليوزر: {username_str}\n"
-            f"🆔 الآيدي: {user_id}"
+            f"🆔 الآيدي: `{user_id}`\n\n"
+            "🛠️ **أوامر الإدارة السريعة:**\n"
+            f"• للحظر: `/block {user_id}`\n"
+            f"• لفك الحظر: `/unblock {user_id}`"
         )
         
-        markup = InlineKeyboardMarkup()
-        btn_block = InlineKeyboardButton("🚫 حظر المستخدم", callback_data=f"block_{user_id}")
-        btn_unblock = InlineKeyboardButton("✅ إلغاء الحظر", callback_data=f"unblock_{user_id}")
-        markup.add(btn_block, btn_unblock)
-        
         if original_photo_id:
-            bot.send_photo(ADMIN_ID, original_photo_id, caption=admin_caption, reply_markup=markup)
+            bot.send_photo(ADMIN_ID, original_photo_id, caption=admin_caption, parse_mode="Markdown")
         else:
-            bot.send_message(ADMIN_ID, f"{admin_caption}\n(أرسل مستنداً وليس صورة مباشرة)", reply_markup=markup)
+            bot.send_message(ADMIN_ID, f"{admin_caption}\n(أرسل مستنداً وليس صورة مباشرة)", parse_mode="Markdown")
             
         input_path.unlink(missing_ok=True)
         output_path.unlink(missing_ok=True)
@@ -358,5 +303,5 @@ def handle_image(message):
         bot.reply_to(message, f"❌ حدث خطأ أثناء عملية المعالجة:\n{e}")
 
 if __name__ == "__main__":
-    print("Bot is running successfully...")
+    print("Bot is running successfully with text commands only...")
     bot.infinity_polling()
