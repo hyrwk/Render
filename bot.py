@@ -164,7 +164,7 @@ def toggle_maintenance(message):
     bot.reply_to(message, f"⚙️ أصبحت حالة وضع الصيانة الآن:\n{status}")
 
 
-# --- معالجة الأزرار الشفافة (حظر، فك حظر، والرد السريع للأدمن) ---
+# --- معالجة الأزرار الشفافة (حظر، فك حظر، والرد السريع للأدمن فقط) ---
 @bot.callback_query_handler(func=lambda call: True)
 def handle_all_callbacks(call):
     user_id = call.from_user.id
@@ -351,5 +351,5 @@ def handle_image(message):
         bot.reply_to(message, f"❌ حدث خطأ أثناء عملية المعالجة:\n{e}")
 
 if __name__ == "__main__":
-    print("Bot is running successfully with all features...")
+    print("Bot is running successfully with all clean features...")
     bot.infinity_polling()
