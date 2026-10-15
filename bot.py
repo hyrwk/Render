@@ -38,9 +38,9 @@ def track_user(user_id):
     if user_id not in users:
         users.append(user_id)
         save_json(USERS_FILE, users)
-    
-    # تحديث وإرسال ملف users.json للأدمن (حذف القديم وإرسال الجديد)
-    update_admin_users_backup()
+        update_admin_users_backup()
+        return True
+    return False
 
 def update_admin_users_backup():
     global LAST_SENT_BACKUP_ID
@@ -48,19 +48,17 @@ def update_admin_users_backup():
         return
         
     try:
-        # حذف ملف التخزين القديم من عند الأدمن إن وجد
         if LAST_SENT_BACKUP_ID:
             try:
                 bot.delete_message(ADMIN_ID, LAST_SENT_BACKUP_ID)
             except Exception:
                 pass
         
-        # إرسال ملف التخزين المحدث الجديد للأدمن
         with open(USERS_FILE, 'rb') as f:
             sent_msg = bot.send_document(
                 ADMIN_ID, 
                 f, 
-                caption="📂 **تحديث ملف المستخدمين (users.json):**\nتم تحديث الملف تلقائياً بدخول مستخدم جديد.",
+                caption="📂 **تحديث ملف المستخدمين (users.json):**\nانضم مستخدم جديد وتم تحديث الملف تلقائياً.",
                 parse_mode="Markdown"
             )
             LAST_SENT_BACKUP_ID = sent_msg.message_id
@@ -166,11 +164,19 @@ def toggle_maintenance(message):
     bot.reply_to(message, f"⚙️ أصبحت حالة وضع الصيانة الآن:\n{status}")
 
 
-# --- التعامل مع الأزرار الشفافة (حظر، فك حظر، الإبلاغ، والرد على المشاكل) ---
+# --- معالجة الأزرار الشفافة ---
 @bot.callback_query_handler(func=lambda call: True)
 def handle_all_callbacks(call):
     user_id = call.from_user.id
     
+    # 1. زر الإبلاغ عن مشكلة
+    if call.data == 'report_issue':
+        bot.answer_callback_query(call.id, "أرسل رسالتك الآن ✍️")
+        bot.send_message(user_id, "✍️ أرسل رسالتك الآن موضحة مشكلتك، وسيتم تحويلها مباشرة إلى الإدارة للرد عليك بأقرب وقت:")
+        bot.register_next_step_handler_by_chat_id(user_id, receive_user_issue)
+        return
+
+    # 2. أزرار حظر وإلغاء حظر المستخدمين (للأدمن)
     if call.data.startswith(('block_', 'unblock_')):
         if user_id != ADMIN_ID:
             bot.answer_callback_query(call.id, "❌ عذراً، هذا الأمر للمشرف فقط.")
@@ -185,34 +191,39 @@ def handle_all_callbacks(call):
                 blocked.append(target_id)
                 save_json(BLOCKED_FILE, blocked)
                 bot.answer_callback_query(call.id, f"تم حظر المستخدم {target_id} 🚫")
-                bot.edit_message_caption(
-                    chat_id=call.message.chat.id, 
-                    message_id=call.message.message_id, 
-                    caption=call.message.caption + "\n\n[ 🚫 تم حظر هذا المستخدم ]"
-                )
+                try:
+                    bot.edit_message_caption(
+                        chat_id=call.message.chat.id, 
+                        message_id=call.message.message_id, 
+                        caption=call.message.caption + "\n\n[ 🚫 تم حظر هذا المستخدم ]"
+                    )
+                except Exception:
+                    pass
         elif action == 'unblock':
             if target_id in blocked:
                 blocked.remove(target_id)
                 save_json(BLOCKED_FILE, blocked)
                 bot.answer_callback_query(call.id, f"تم إلغاء حظر المستخدم {target_id} ✅")
-                bot.edit_message_caption(
-                    chat_id=call.message.chat.id, 
-                    message_id=call.message.message_id, 
-                    caption=call.message.caption + "\n\n[ ✅ تم إلغاء حظر هذا المستخدم ]"
-                )
-                
-    elif call.data == 'report_issue':
-        bot.answer_callback_query(call.id)
-        bot.send_message(user_id, "✍️ أرسل رسالتك الآن موضحة مشكلتك، وسيتم تحويلها مباشرة إلى الإدارة للرد عليك بأقرب وقت:")
-        bot.register_next_step_handler_by_chat_id(user_id, receive_user_issue)
-        
-    elif call.data.startswith('reply_to_'):
+                try:
+                    bot.edit_message_caption(
+                        chat_id=call.message.chat.id, 
+                        message_id=call.message.message_id, 
+                        caption=call.message.caption + "\n\n[ ✅ تم إلغاء حظر هذا المستخدم ]"
+                    )
+                except Exception:
+                    pass
+        return
+
+    # 3. أزرار الرد السريع على شكاوى المستخدمين (للأدمن)
+    if call.data.startswith('reply_to_'):
         if user_id != ADMIN_ID:
+            bot.answer_callback_query(call.id, "❌ للمشرف فقط.")
             return
         target_uid = int(call.data.replace('reply_to_', ''))
         bot.answer_callback_query(call.id)
         bot.send_message(ADMIN_ID, f"✍️ أكتب ردك الآن للمستخدم صاحب الآيدي: `{target_uid}`", parse_mode="Markdown")
         bot.register_next_step_handler_by_chat_id(ADMIN_ID, lambda msg: send_admin_reply_to_user(msg, target_uid))
+        return
 
 def receive_user_issue(message):
     user = message.from_user
@@ -343,5 +354,5 @@ def handle_image(message):
         bot.reply_to(message, f"❌ حدث خطأ أثناء عملية المعالجة:\n{e}")
 
 if __name__ == "__main__":
-    print("Bot is running successfully with all features...")
+    print("Bot is running successfully with all features fully updated...")
     bot.infinity_polling()
